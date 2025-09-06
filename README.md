@@ -1,3 +1,167 @@
+# Context
+
+OnRev exposes a **FastAPI** app that writes `Person`, `AdCampaign`, and `Clicked_on` data into **Neo4j**. In Google Cloud, the app is fronted by a signed proxy and an API Gateway so external tools (e.g., **Make.com**) can call it safely with just an API key.
+
+**High-level pieces**
+
+* **Cloud Run – `onrev-api`**
+	Containerized FastAPI service talking to Neo4j (AuraDB or self-hosted) using env vars:
+	`NEO4J_URI`, `NEO4J_USERNAME`, `NEO4J_PASSWORD`, `NEO4J_DATABASE`.
+
+* **Cloud Functions (Gen2) – `onrev-proxy`**
+	Forwards requests to Cloud Run using an **ID token** (audience = Cloud Run URL) and adds a shared secret header `x-api-key`. Runs as SA **`onrev-proxy-sa`**.
+
+* **API Gateway – `onrev-gw`**
+	Public HTTPS hostname (e.g., `https://<gw>.gateway.dev`) that requires `?key=<GatewayKey>`. Gateway calls the proxy as SA **`onrev-gw-sa`**. You manage routes with a Swagger v2 file (e.g., `onrev-gw-v2.yaml`).
+
+* **Make.com**
+	Calls `https://<gw>.gateway.dev/<endpoint>?key=<GatewayKey>` with header `x-api-key: <FunctionHeaderKey>`. Your API already tolerates missing UTM fields (falls back to `Unknown`/generated ids).
+
+**Auth chain**
+
+`Make.com (API key) → API Gateway (GW SA) → Cloud Function Proxy (Proxy SA + ID Token) → Cloud Run (checks audience + x-api-key) → FastAPI → Neo4j`
+
+---
+
+## How it runs on GCP
+
+1. **App** runs in **Cloud Run** and reads Neo4j env vars.
+2. **Proxy** runs in **Cloud Functions Gen2**, mints an **ID token** for the Cloud Run URL, and forwards requests, attaching `x-api-key`.
+3. **API Gateway** exposes a public URL, validates `?key=...`, and uses its **service account** to invoke the proxy.
+4. **Make.com** hits the Gateway URL (query param key + header).
+	 Your API handles blank/missing UTM values by defaulting to `"Unknown"` and generating a stable id.
+
+---
+
+## Commands on terminal
+
+> Use **PowerShell** (Windows) or translate to your shell. Replace the bracketed placeholders.
+
+### 0) Project and services
+
+```powershell
+$PROJECT_ID = "<your-project-id>"
+$REGION     = "europe-west2"
+
+gcloud config set project $PROJECT_ID
+gcloud services enable run.googleapis.com cloudfunctions.googleapis.com `
+	apigateway.googleapis.com servicemanagement.googleapis.com servicecontrol.googleapis.com `
+	apikeys.googleapis.com
+```
+
+### 1) Deploy the FastAPI app to Cloud Run (from the `onrev/` folder)
+
+```powershell
+cd <repo>/onrev
+gcloud run deploy onrev-api --region=$REGION --source=.
+
+# Neo4j config (Aura example)
+$NEO4J_URI      = "neo4j+s://<aura-id>.databases.neo4j.io"
+$NEO4J_USERNAME = "neo4j"
+$NEO4J_PASSWORD = "<password>"
+$NEO4J_DATABASE = "neo4j"
+
+gcloud run services update onrev-api --region=$REGION `
+	--set-env-vars "NEO4J_URI=$NEO4J_URI,NEO4J_USERNAME=$NEO4J_USERNAME,NEO4J_PASSWORD=$NEO4J_PASSWORD,NEO4J_DATABASE=$NEO4J_DATABASE"
+
+$RUN_URL = gcloud run services describe onrev-api --region=$REGION --format "value(status.url)"
+```
+
+### 2) Create service accounts & permissions (once)
+
+```powershell
+# Gateway SA (used by API Gateway to call proxy)
+$GW_SA = "onrev-gw-sa@$PROJECT_ID.iam.gserviceaccount.com"
+gcloud iam service-accounts create onrev-gw-sa --display-name="OnRev API Gateway SA"
+
+# Proxy SA (used by the Cloud Function)
+$CF_SA = "onrev-proxy-sa@$PROJECT_ID.iam.gserviceaccount.com"
+gcloud iam service-accounts create onrev-proxy-sa --display-name="OnRev Proxy SA"
+
+# Allow the proxy to call Cloud Run
+gcloud run services add-iam-policy-binding onrev-api --region=$REGION `
+	--member="serviceAccount:$CF_SA" --role="roles/run.invoker"
+```
+
+### 3) Deploy the proxy (from the `onrev-proxy/` folder)
+
+```powershell
+cd <repo>/onrev-proxy
+
+# Secret header value the app expects
+$FUNC_HEADER_KEY = "<choose-a-random-string>"
+
+gcloud functions deploy onrev-proxy --gen2 --region=$REGION --runtime=python311 `
+	--source=. --entry-point=proxy --trigger-http `
+	--service-account=$CF_SA `
+	--set-env-vars "TARGET_URL=$RUN_URL,API_KEY=$FUNC_HEADER_KEY"
+
+$CF_URL = gcloud functions describe onrev-proxy --gen2 --region=$REGION --format "value(url)"
+```
+
+### 4) API Gateway config & gateway
+
+Prepare `onrev-gw-v2.yaml` (Swagger v2) pointing to `$CF_URL` with routes for `/docs`, `/openapi.json`, `/person`, `/campaign`, `/clicked_on`.
+
+```powershell
+$GW_API = "onrev-gw"
+gcloud api-gateway apis create $GW_API
+
+$GW_CFG = "onrev-gw-v2-$(Get-Date -Format yyyyMMddHHmmss)"
+gcloud api-gateway api-configs create $GW_CFG `
+	--api=$GW_API `
+	--openapi-spec=onrev-gw-v2.yaml `
+	--backend-auth-service-account=$GW_SA
+
+gcloud api-gateway gateways create onrev-gw `
+	--api=$GW_API --api-config=$GW_CFG `
+	--location=$REGION
+
+$GW_HOST = gcloud api-gateway gateways describe onrev-gw --location=$REGION --format "value(defaultHostname)"
+```
+
+### 5) API key for Gateway (`?key=...`)
+
+```powershell
+$KEY_NAME = gcloud services api-keys create --display-name="onrev-make" --format="value(name)"
+$GW_KEY   = gcloud services api-keys get-key-string $KEY_NAME --format="value(keyString)"
+```
+
+### 6) Smoke tests (exactly how Make.com will call)
+
+```powershell
+# Swagger UI HTML (expect 200)
+Invoke-WebRequest -Uri "https://$GW_HOST/docs?key=$GW_KEY" -Headers @{ 'x-api-key' = $FUNC_HEADER_KEY } `
+	| Select-Object -ExpandProperty StatusCode
+
+# Insert/merge a campaign (your API defaults if UTM is blank)
+$body = '{"id":"unknown","campaign":"Unknown"}'
+Invoke-RestMethod -Method POST -Uri "https://$GW_HOST/campaign?key=$GW_KEY" `
+	-Headers @{ 'x-api-key' = $FUNC_HEADER_KEY } `
+	-ContentType 'application/json' -Body $body
+```
+
+### 7) Make.com wiring (HTTP → Make a request)
+
+```
+URL:     https://<GW_HOST>/<endpoint>?key={{GW_KEY}}
+Headers: x-api-key: {{FUNC_HEADER_KEY}}
+Method:  POST (or GET)
+Body:    JSON (e.g., person/campaign/click payloads)
+```
+
+---
+
+## Where to find it later (Console)
+
+* **Cloud Run → Services**: `onrev-api` (URL, Env Vars, Logs)
+* **Cloud Functions (Gen2)**: `onrev-proxy` (URL, Env Vars, Logs)
+* **API Gateway**: `onrev-gw` (default hostname, configs)
+* **IAM → Service Accounts**: `onrev-gw-sa`, `onrev-proxy-sa`
+* **APIs & Services → Credentials**: API Keys (look for display name like `onrev-make`)
+
+This section can be pasted before your existing README content.
+
 # OnRev API
 
 ## Overview
