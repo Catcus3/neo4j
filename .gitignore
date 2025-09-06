@@ -1,0 +1,10 @@
+onrev/.env
+onrev/.dockerignore
+onrev/test.py
+onrev/__pycache__
+onrev/Procfile
+onrev/.gcloudignore
+onrev-proxy/onrev-gw-v2.yaml
+onrev-proxy/onrev-gw.yaml
+onrev-proxy/onrev-proxy-sa.json
+venv/
