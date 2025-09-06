@@ -159,12 +159,10 @@ Body:    JSON (e.g., person/campaign/click payloads)
 * **IAM → Service Accounts**: `onrev-gw-sa`, `onrev-proxy-sa`
 * **APIs & Services → Credentials**: API Keys (look for display name like `onrev-make`)
 
-This section can be pasted before your existing README content.
-
 # OnRev API
 
 ## Overview
-OnRev = FastAPI-based microservice that interacts with a Neo4j graph database to manage marketing campaign data, user clicks, and relationships. It exposes REST endpoints for upserting people, campaigns, and click events, and for sampling recent click data.
+FastAPI-based microservice that interacts with a Neo4j graph database to manage marketing campaign data, user clicks, and relationships. It exposes REST endpoints for upserting people, campaigns, and click events, and for sampling recent click data.
 
 ## Features
 - Upsert (create/update) Person nodes
@@ -201,9 +199,9 @@ pip install -r requirements.txt
 ### 4. Configure environment variables
 Create a `.env` file in the `onrev` directory:
 ```
-NEO4J_URI=bolt://localhost:7687 #found in neo4j instance
+NEO4J_URI=<neo4j_instance_uri> #found in neo4j instance
 NEO4J_USER=neo4j
-NEO4J_PASS=your_password
+NEO4J_PASS=<neo4j_instance_password>
 NEO4J_DB=neo4j
 ```
 
@@ -285,7 +283,7 @@ pip install -r requirements.txt
 ```
 
 ### 4. Configure service account and gateway
-- Place your service account JSON in `onrev-proxy-sa.json`
+- Place service account JSON in `onrev-proxy-sa.json`
 - Configure routing and authentication in `onrev-gw.yaml` or `onrev-gw-v2.yaml`
 
 ### 5. Run the proxy server
@@ -311,5 +309,5 @@ docker run --env-file .env -p 8080:8080 onrev-proxy
 
 ## Notes
 - Ensure the OnRev API is running and accessible before starting the proxy.
-- Update YAML and JSON config files to match your environment and security needs.
+- Update YAML and JSON config files to match environment and security needs.
 - Extend proxy logic in `main.py` for custom routing, logging, or authentication as needed.
