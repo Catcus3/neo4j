@@ -2,7 +2,7 @@
 
 OnRev exposes a **FastAPI** app that writes `Person`, `AdCampaign`, and `Clicked_on` data into **Neo4j**. In Google Cloud, the app is fronted by a signed proxy and an API Gateway so external tools (e.g., **Make.com**) can call it safely with just an API key.
 
-**High-level pieces**
+**Overall architecture**
 
 * **Cloud Run – `onrev-api`**
 	Containerized FastAPI service talking to Neo4j (AuraDB or self-hosted) using env vars:
@@ -15,7 +15,7 @@ OnRev exposes a **FastAPI** app that writes `Person`, `AdCampaign`, and `Clicked
 	Public HTTPS hostname (e.g., `https://<gw>.gateway.dev`) that requires `?key=<GatewayKey>`. Gateway calls the proxy as SA **`onrev-gw-sa`**. You manage routes with a Swagger v2 file (e.g., `onrev-gw-v2.yaml`).
 
 * **Make.com**
-	Calls `https://<gw>.gateway.dev/<endpoint>?key=<GatewayKey>` with header `x-api-key: <FunctionHeaderKey>`. Your API already tolerates missing UTM fields (falls back to `Unknown`/generated ids).
+	Calls `https://<gw>.gateway.dev/<endpoint>?key=<GatewayKey>` with header `x-api-key: <FunctionHeaderKey>`. API already tolerates missing UTM fields (falls back to `Unknown`/generated ids).
 
 **Auth chain**
 
@@ -29,18 +29,17 @@ OnRev exposes a **FastAPI** app that writes `Person`, `AdCampaign`, and `Clicked
 2. **Proxy** runs in **Cloud Functions Gen2**, mints an **ID token** for the Cloud Run URL, and forwards requests, attaching `x-api-key`.
 3. **API Gateway** exposes a public URL, validates `?key=...`, and uses its **service account** to invoke the proxy.
 4. **Make.com** hits the Gateway URL (query param key + header).
-	 Your API handles blank/missing UTM values by defaulting to `"Unknown"` and generating a stable id.
-
+   API handles blank/missing UTM values by defaulting to `"Unknown"` and generating a stable id.
 ---
 
 ## Commands on terminal
 
-> Use **PowerShell** (Windows) or translate to your shell. Replace the bracketed placeholders.
+> Use **PowerShell** (Windows) or bash on macOS/Linux. Replace the bracketed placeholders.
 
 ### 0) Project and services
 
 ```powershell
-$PROJECT_ID = "<your-project-id>"
+$PROJECT_ID = "<project-id>"
 $REGION     = "europe-west2"
 
 gcloud config set project $PROJECT_ID
@@ -134,7 +133,7 @@ $GW_KEY   = gcloud services api-keys get-key-string $KEY_NAME --format="value(ke
 Invoke-WebRequest -Uri "https://$GW_HOST/docs?key=$GW_KEY" -Headers @{ 'x-api-key' = $FUNC_HEADER_KEY } `
 	| Select-Object -ExpandProperty StatusCode
 
-# Insert/merge a campaign (your API defaults if UTM is blank)
+# Insert/merge a campaign (API defaults if UTM is blank)
 $body = '{"id":"unknown","campaign":"Unknown"}'
 Invoke-RestMethod -Method POST -Uri "https://$GW_HOST/campaign?key=$GW_KEY" `
 	-Headers @{ 'x-api-key' = $FUNC_HEADER_KEY } `
