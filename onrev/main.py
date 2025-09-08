@@ -187,3 +187,7 @@ def sample():
         database_=DB
     )
     return [r.data() for r in recs]
+
+
+from extract_id import router as extract_id_router
+app.include_router(extract_id_router)

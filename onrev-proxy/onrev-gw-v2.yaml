@@ -1,0 +1,163 @@
+﻿swagger: "2.0"
+info:
+  title: onrev-proxy-gw
+  version: "1.0.0"
+schemes:
+  - https
+
+paths:
+  /docs:
+    get:
+      operationId: getDocs
+      security:
+        - api_key: []
+      x-google-backend:
+        address: https://europe-west2-neo4j-on-gcp.cloudfunctions.net/onrev-proxy
+        path_translation: APPEND_PATH_TO_ADDRESS
+        jwt_audience: https://europe-west2-neo4j-on-gcp.cloudfunctions.net/onrev-proxy
+      responses:
+        "200": { description: OK }
+
+  /openapi.json:
+    get:
+      operationId: getOpenapi
+      security:
+        - api_key: []
+      x-google-backend:
+        address: https://europe-west2-neo4j-on-gcp.cloudfunctions.net/onrev-proxy
+        path_translation: APPEND_PATH_TO_ADDRESS
+        jwt_audience: https://europe-west2-neo4j-on-gcp.cloudfunctions.net/onrev-proxy
+      responses:
+        "200": { description: OK }
+
+  /person:
+    post:
+      operationId: postPerson
+      security:
+        - api_key: []
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema: { type: object }
+      consumes: [ application/json ]
+      x-google-backend:
+        address: https://europe-west2-neo4j-on-gcp.cloudfunctions.net/onrev-proxy
+        path_translation: APPEND_PATH_TO_ADDRESS
+        jwt_audience: https://europe-west2-neo4j-on-gcp.cloudfunctions.net/onrev-proxy
+      responses:
+        "200": { description: OK }
+
+  /campaign:
+    post:
+      operationId: postCampaign
+      security:
+        - api_key: []
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema: { type: object }
+      consumes: [ application/json ]
+      x-google-backend:
+        address: https://europe-west2-neo4j-on-gcp.cloudfunctions.net/onrev-proxy
+        path_translation: APPEND_PATH_TO_ADDRESS
+        jwt_audience: https://europe-west2-neo4j-on-gcp.cloudfunctions.net/onrev-proxy
+      responses:
+        "200": { description: OK }
+
+  /clicked_on:
+    post:
+      operationId: postClickedOn
+      security:
+        - api_key: []
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema: { type: object }
+      consumes: [ application/json ]
+      x-google-backend:
+        address: https://europe-west2-neo4j-on-gcp.cloudfunctions.net/onrev-proxy
+        path_translation: APPEND_PATH_TO_ADDRESS
+        jwt_audience: https://europe-west2-neo4j-on-gcp.cloudfunctions.net/onrev-proxy
+      responses:
+        "200": { description: OK }
+
+  /sample:
+    get:
+      operationId: getSample
+      security:
+        - api_key: []
+      x-google-backend:
+        address: https://europe-west2-neo4j-on-gcp.cloudfunctions.net/onrev-proxy
+        path_translation: APPEND_PATH_TO_ADDRESS
+        jwt_audience: https://europe-west2-neo4j-on-gcp.cloudfunctions.net/onrev-proxy
+      responses:
+        "200": { description: OK }
+
+  # -----------------------------
+  # NEW: internal Neo4j IDs for :Person
+  # -----------------------------
+  /ids/person/internal:
+    get:
+      operationId: listPersonInternalIds
+      description: Returns Neo4j elementId() values for :Person nodes (paginated)
+      security:
+        - api_key: []
+      parameters:
+        - in: query
+          name: only_connected
+          type: boolean
+          required: false
+          default: false
+          description: If true, only persons with at least one :Clicked_on
+        - in: query
+          name: skip
+          type: integer
+          required: false
+          default: 0
+          minimum: 0
+        - in: query
+          name: limit
+          type: integer
+          required: false
+          default: 500
+      x-google-backend:
+        address: https://europe-west2-neo4j-on-gcp.cloudfunctions.net/onrev-proxy
+        path_translation: APPEND_PATH_TO_ADDRESS
+        jwt_audience: https://europe-west2-neo4j-on-gcp.cloudfunctions.net/onrev-proxy
+      responses:
+        "200": { description: OK }
+
+  # (Optional) NEW: external->internal mapping for :Person
+  /ids/person/map:
+    get:
+      operationId: listPersonIdMap
+      description: Returns {external_id, neo4j_id} pairs for :Person nodes (paginated)
+      security:
+        - api_key: []
+      parameters:
+        - in: query
+          name: skip
+          type: integer
+          required: false
+          default: 0
+          minimum: 0
+        - in: query
+          name: limit
+          type: integer
+          required: false
+          default: 500
+      x-google-backend:
+        address: https://europe-west2-neo4j-on-gcp.cloudfunctions.net/onrev-proxy
+        path_translation: APPEND_PATH_TO_ADDRESS
+        jwt_audience: https://europe-west2-neo4j-on-gcp.cloudfunctions.net/onrev-proxy
+      responses:
+        "200": { description: OK }
+
+securityDefinitions:
+  api_key:
+    type: apiKey
+    in: query
+    name: key
