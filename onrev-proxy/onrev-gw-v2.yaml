@@ -1,11 +1,15 @@
-﻿swagger: "2.0"
+﻿# --- Swagger/OpenAPI specification for onrev-proxy-gw ---
+swagger: "2.0"
 info:
   title: onrev-proxy-gw
   version: "1.0.0"
+
+# --- Supported schemes ---
 schemes:
   - https
 
 paths:
+  # --- Documentation endpoints ---
   /docs:
     get:
       operationId: getDocs
@@ -30,6 +34,7 @@ paths:
       responses:
         "200": { description: OK }
 
+  # --- Data creation endpoints ---
   /person:
     post:
       operationId: postPerson
@@ -84,6 +89,7 @@ paths:
       responses:
         "200": { description: OK }
 
+  # --- Sample data endpoint ---
   /sample:
     get:
       operationId: getSample
@@ -99,6 +105,7 @@ paths:
   # -----------------------------
   # NEW: internal Neo4j IDs for :Person
   # -----------------------------
+  # --- Endpoint to get Neo4j internal elementId values for :Person nodes ---
   /ids/person/internal:
     get:
       operationId: listPersonInternalIds
@@ -130,7 +137,7 @@ paths:
       responses:
         "200": { description: OK }
 
-  # (Optional) NEW: external->internal mapping for :Person
+  # --- Endpoint to get external->internal mapping for :Person nodes ---
   /ids/person/map:
     get:
       operationId: listPersonIdMap
@@ -156,6 +163,7 @@ paths:
       responses:
         "200": { description: OK }
 
+# --- API key security definition ---
 securityDefinitions:
   api_key:
     type: apiKey

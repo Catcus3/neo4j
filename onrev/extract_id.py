@@ -7,8 +7,6 @@ optionally returning an external→internal mapping.
 - GET /ids/person/map      -> { "items": [{external_id, neo4j_id}, ...], "next_skip": <int> }
 """
 
-# --- Imports and environment setup ---
-# Import required libraries for FastAPI, Neo4j, environment variable loading, and type hints.
 from typing import List, Optional
 import os
 
